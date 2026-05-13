@@ -182,8 +182,8 @@ args = SFTConfig(
     dataset_kwargs={"skip_prepare_dataset": ___},
 
     # === 一般 SFT 訓練參數 ===
-    per_device_train_batch_size=2,
-    gradient_accumulation_steps=4,  # 有效 batch = 2 * 4 = 8
+    per_device_train_batch_size=1,
+    gradient_accumulation_steps=8,  # 有效 batch = 1 * 8 = 8
     num_train_epochs=2,
     learning_rate=2e-4,
     warmup_ratio=0.05,
@@ -277,7 +277,7 @@ trainer = SFTTrainer(
     eval_dataset=val_ds,
     data_collator=collate_fn,
     peft_config=peft_config,
-    processing_class=processor.tokenizer,
+    processing_class=processor,
 )
 
 # LoRA 加上後再估算一次
