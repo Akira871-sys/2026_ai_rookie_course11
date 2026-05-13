@@ -3,8 +3,6 @@
 > 訓練 Vision LLM 從印尼收據（CORD-v2）抽取結構化 JSON
 
 ## 環境需求
-
-- Ubuntu + NVIDIA GPU (16GB VRAM)
 - CUDA 13.0
 - Python 3.11+
 - uv 套件管理器
@@ -22,6 +20,54 @@ uv sync
 # 3. 驗證環境
 uv run python lab0_setup.py
 ```
+
+## W&B (Weights & Biases) 訓練監控設定
+
+本課程使用 [Weights & Biases](https://wandb.ai) 來即時視覺化訓練過程（loss 曲線、學習率、VRAM 使用量等）以及記錄評估結果。**請在執行 Lab 3 之前完成以下設定。**
+
+### Step 1: 註冊帳號
+
+前往 [https://wandb.ai/site](https://wandb.ai/site) 點擊 **Sign Up**，可使用 GitHub / Google 帳號快速註冊。
+
+### Step 2: 取得 API Key
+
+登入後前往 [https://wandb.ai/authorize](https://wandb.ai/authorize)，複製你的 API Key。
+
+### Step 3: 設定環境變數
+
+在終端機中執行 `wandb login`，貼上你的 API Key：
+
+```bash
+uv run wandb login
+# 貼上你的 API Key（不會顯示在螢幕上），按 Enter
+```
+
+或者直接設定環境變數（不需要互動輸入）：
+
+```bash
+# Linux / macOS
+export WANDB_API_KEY="你的_API_Key"
+
+# Windows PowerShell
+$env:WANDB_API_KEY="你的_API_Key"
+```
+
+### Step 4: 確認連線
+
+```bash
+uv run python -c "import wandb; wandb.init(project='test'); wandb.finish(); print('W&B 連線成功！')"
+```
+
+成功後你可以在 [https://wandb.ai](https://wandb.ai) 看到一個 `test` 專案。
+
+### 在 Lab 中的用途
+
+| Lab | W&B 功能 |
+|-----|----------|
+| Lab 3 | 即時追蹤 train loss、eval loss、learning rate 曲線 |
+| Lab 4 | 記錄評估指標（F1、TED、Parse Rate）、上傳圖表與預測結果表格 |
+
+> **離線模式**: 如果無法連網，可設定 `WANDB_MODE=offline`，訓練結束後再用 `wandb sync` 上傳。
 
 ## Lab 結構
 
@@ -73,7 +119,6 @@ vlm-sft-lab/
 
 ## 交付物
 
-1. 完整的 5 個 .py 檔（填好所有 TODO）
-2. 訓練結果 metrics 報告（zero-shot vs SFT 對照表）
-3. 錯誤分析（至少 3 個失敗 pattern，200 字）
-4. (選做) Push adapter 到 HuggingFace Hub
+1. 訓練結果 metrics 報告（zero-shot vs SFT 對照表）
+2. W&B Dashboard 截圖（包含 loss 曲線與評估指標）
+3. (選做) Push adapter 到 HuggingFace Hub

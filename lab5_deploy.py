@@ -256,24 +256,3 @@ def create_gradio_demo(model, processor):
 # 取消下面的註解來啟動 Gradio demo:
 # demo = create_gradio_demo(model, processor)
 # demo.launch(server_name="0.0.0.0", server_port=7860, share=False)
-
-print("""
-╔══════════════════════════════════════════════════════════════╗
-║  Lab 5 完成！                                               ║
-╠══════════════════════════════════════════════════════════════╣
-║                                                              ║
-║  ☐ LoRA 成功合併到 base model                               ║
-║  ☐ 合併後的模型可以正常推論                                 ║
-║  ☐ 測量了推論速度 (tokens/sec)                              ║
-║  ☐ 了解各種推論加速方案的適用場景                            ║
-║  ☐ (Bonus) Gradio demo 可以跑                               ║
-║                                                              ║
-║  恭喜完成所有 Lab！🎉                                       ║
-║                                                              ║
-╚══════════════════════════════════════════════════════════════╝
-
-如果你想啟動 Gradio demo，取消 Section 6 的註解後重新執行:
-    uv run python lab5_deploy.py
-
-Gradio 會在 http://localhost:7860 提供 web 介面。
-""")

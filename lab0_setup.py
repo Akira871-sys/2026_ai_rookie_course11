@@ -93,10 +93,6 @@ def verify_environment():
     else:
         print("  ⏭️  跳過（無 GPU）")
 
-    print("\n" + "=" * 60)
-    print("✅ 環境驗證完成！可以開始 Lab 1。")
-    print("=" * 60)
-
 
 if __name__ == "__main__":
     verify_environment()

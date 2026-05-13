@@ -6,12 +6,15 @@ Lab 3: LoRA SFT 訓練主流程
   - 設定 VLM-specific 的 SFTConfig
   - 在 16GB GPU 上完成完整訓練
   - 監控 VRAM 使用量
+  - 使用 W&B 即時追蹤訓練狀態（loss、lr 曲線）
+
+前置要求:
+  - 已完成 wandb login（見 README.md）
 
 執行方式:
     uv run python lab3_train.py
 
 預期:
-  - 訓練時間: 30-45 分鐘
   - VRAM peak: 11-12 GB
   - Loss: 從 ~2.5 降到 ~0.4
   - Adapter 大小: ~30 MB
@@ -20,13 +23,30 @@ Lab 3: LoRA SFT 訓練主流程
 import json
 
 import torch
+import wandb
 from datasets import load_dataset
 from peft import LoraConfig
 from transformers import AutoProcessor, Qwen2_5_VLForConditionalGeneration
 from trl import SFTConfig, SFTTrainer
 
 # ============================================================
-# Section 1: 載入模型 + Processor
+# Section 1: 初始化 Weights & Biases
+# ============================================================
+
+wandb.init(
+    project="vlm-sft-lab",
+    name="qwen25vl-cord-lora",
+    config={
+        "model": "Qwen/Qwen2.5-VL-3B-Instruct",
+        "task": "receipt-extraction",
+        "dataset": "naver-clova-ix/cord-v2",
+        "method": "LoRA SFT",
+    },
+)
+print("W&B 初始化完成！可至 https://wandb.ai 查看即時訓練狀態。")
+
+# ============================================================
+# Section 2: 載入模型 + Processor
 # ============================================================
 
 MODEL_ID = "Qwen/Qwen2.5-VL-3B-Instruct"
@@ -47,7 +67,7 @@ model = Qwen2_5_VLForConditionalGeneration.from_pretrained(
 print(f"模型載入完成: {MODEL_ID}")
 
 # ============================================================
-# Section 2: 載入並格式化資料集（沿用 Lab 2 的邏輯）
+# Section 3: 載入並格式化資料集（沿用 Lab 2 的邏輯）
 # ============================================================
 
 SYSTEM_PROMPT = "你是專業的收據資訊抽取助手。請從圖片中抽取所有結構化資訊，以 JSON 格式輸出。"
@@ -79,7 +99,7 @@ val_ds = ds["validation"].map(format_to_messages, remove_columns=ds["validation"
 print(f"  Train: {len(train_ds)} | Val: {len(val_ds)}")
 
 # ============================================================
-# Section 3: Collate Function（Lab 2 的完成版）
+# Section 4: Collate Function（Lab 2 的完成版）
 # ============================================================
 
 IMAGE_TOKEN_ID = processor.tokenizer.convert_tokens_to_ids("<|image_pad|>")
@@ -109,7 +129,7 @@ def collate_fn(examples):
 
 
 # ============================================================
-# Section 4: TODO #1 — LoRA Config 🟡
+# Section 5: TODO #1 — LoRA Config 🟡
 # ============================================================
 
 peft_config = LoraConfig(
@@ -141,7 +161,7 @@ peft_config = LoraConfig(
 print(f"\nLoRA config: r={peft_config.r}, alpha={peft_config.lora_alpha}")
 
 # ============================================================
-# Section 5: TODO #2 — SFTConfig 🟡
+# Section 6: TODO #2 — SFTConfig 🟡
 # ============================================================
 
 args = SFTConfig(
@@ -188,12 +208,12 @@ args = SFTConfig(
     logging_steps=10,
     save_strategy="epoch",
     eval_strategy="epoch",
-    report_to="tensorboard",
+    report_to="wandb",
     seed=42,
 )
 
 # ============================================================
-# Section 6: TODO #3 — VRAM 估算 🟡
+# Section 7: TODO #3 — VRAM 估算 🟡
 # ============================================================
 
 
@@ -246,7 +266,7 @@ print("\n--- Base model 參數 ---")
 estimate_vram(model)
 
 # ============================================================
-# Section 7: 建立 SFTTrainer
+# Section 8: 建立 SFTTrainer
 # ============================================================
 
 print("\n建立 SFTTrainer...")
@@ -265,8 +285,19 @@ print("\n--- 加上 LoRA 後 ---")
 estimate_vram(trainer.model)
 
 # ============================================================
-# Section 8: 啟動訓練
+# Section 9: 啟動訓練
 # ============================================================
+
+wandb.config.update({
+    "lora_r": peft_config.r,
+    "lora_alpha": peft_config.lora_alpha,
+    "epochs": args.num_train_epochs,
+    "batch_size": args.per_device_train_batch_size,
+    "gradient_accumulation_steps": args.gradient_accumulation_steps,
+    "effective_batch_size": args.per_device_train_batch_size * args.gradient_accumulation_steps,
+    "learning_rate": args.learning_rate,
+    "optimizer": args.optim,
+})
 
 print("\n" + "=" * 60)
 print("開始訓練！")
@@ -277,8 +308,8 @@ print(f"  Batch size:   {args.per_device_train_batch_size} × {args.gradient_acc
 print(f"  Learning rate: {args.learning_rate}")
 print(f"  LoRA rank:    {peft_config.r}")
 print()
-print("提示: 另開終端機執行以下指令來監控 TensorBoard:")
-print(f"  tensorboard --logdir {OUTPUT_DIR} --host 0.0.0.0 --port 6006")
+print("提示: 訓練過程即時同步到 W&B，開啟瀏覽器查看:")
+print(f"  {wandb.run.get_url()}")
 print()
 print("提示: 用 nvidia-smi -l 1 監控 GPU 使用量")
 print("=" * 60)
@@ -286,7 +317,7 @@ print("=" * 60)
 train_result = trainer.train()
 
 # ============================================================
-# Section 9: 訓練結果
+# Section 10: 訓練結果
 # ============================================================
 
 print("\n" + "=" * 60)
@@ -298,7 +329,7 @@ print(f"  Train runtime:  {metrics.get('train_runtime', 0):.0f} seconds")
 print(f"  Train samples/s: {metrics.get('train_samples_per_second', 0):.2f}")
 
 # ============================================================
-# Section 10: TODO #4 — Quick Sanity Check 🟡
+# Section 11: TODO #4 — Quick Sanity Check 🟡
 # ============================================================
 
 
@@ -351,7 +382,7 @@ def quick_sanity_check(trainer, val_ds, processor, n=3):
 quick_sanity_check(trainer, val_ds, processor)
 
 # ============================================================
-# Section 11: 保存 Adapter
+# Section 12: 保存 Adapter
 # ============================================================
 
 print("\n保存 LoRA adapter...")
@@ -367,18 +398,16 @@ adapter_size = sum(
 print(f"  Adapter 已存到: {OUTPUT_DIR}")
 print(f"  Adapter 大小:   {adapter_size / 1e6:.1f} MB")
 
-print("""
-╔══════════════════════════════════════════════════════════════╗
-║  Lab 3 完成！                                               ║
-╠══════════════════════════════════════════════════════════════╣
-║                                                              ║
-║  ☐ LoRA config 設定正確                                     ║
-║  ☐ SFTConfig 的 VLM 特殊參數都填對了                        ║
-║  ☐ VRAM 沒有 OOM                                            ║
-║  ☐ Loss 從 ~2.5 降到 ~0.4                                   ║
-║  ☐ Sanity check 看到模型輸出合理的 JSON                     ║
-║                                                              ║
-║  下一步: Lab 4 — 正式評估 SFT 效果！                        ║
-║                                                              ║
-╚══════════════════════════════════════════════════════════════╝
-""")
+# ============================================================
+# Section 13: 上傳結果到 W&B 並結束
+# ============================================================
+
+wandb.log({
+    "train/final_loss": metrics.get("train_loss", 0),
+    "train/runtime_sec": metrics.get("train_runtime", 0),
+    "train/samples_per_sec": metrics.get("train_samples_per_second", 0),
+    "adapter_size_mb": adapter_size / 1e6,
+})
+
+wandb.finish()
+print("\nW&B run 已結束。完整訓練記錄可至 https://wandb.ai 查看。")

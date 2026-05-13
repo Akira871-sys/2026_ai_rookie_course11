@@ -14,6 +14,7 @@ dependencies = [
     "datasets",
     "pillow",
     "tensorboard",
+    "wandb",
     "matplotlib",
     "edit-distance",
     "qwen-vl-utils",

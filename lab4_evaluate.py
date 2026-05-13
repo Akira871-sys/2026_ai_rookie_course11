@@ -6,6 +6,7 @@ Lab 4: 評估 + 結果分析
   - 做 zero-shot vs SFT 的完整對照
   - 用 Tree Edit Distance 作為進階 metric
   - 系統性錯誤分析，找出失敗 pattern
+  - 將評估指標與圖表上傳至 W&B
 
 執行方式:
     uv run python lab4_evaluate.py
@@ -13,6 +14,7 @@ Lab 4: 評估 + 結果分析
 前置要求:
   - Lab 1 的 baseline_results.json
   - Lab 3 訓練好的 adapter (./qwen25vl-cord-lora/)
+  - 已完成 wandb login（見 README.md）
 """
 
 import json
@@ -22,6 +24,7 @@ import edit_distance
 import matplotlib.pyplot as plt
 import numpy as np
 import torch
+import wandb
 from datasets import load_dataset
 from peft import PeftModel
 from qwen_vl_utils import process_vision_info
@@ -29,7 +32,22 @@ from transformers import AutoProcessor, Qwen2_5_VLForConditionalGeneration
 from tqdm.auto import tqdm
 
 # ============================================================
-# Section 1: 載入模型 + Adapter
+# Section 1: 初始化 Weights & Biases
+# ============================================================
+
+wandb.init(
+    project="vlm-sft-lab",
+    name="qwen25vl-cord-eval",
+    config={
+        "model": "Qwen/Qwen2.5-VL-3B-Instruct",
+        "task": "receipt-extraction-eval",
+        "dataset": "naver-clova-ix/cord-v2",
+    },
+)
+print("W&B 初始化完成！評估結果將同步至 https://wandb.ai")
+
+# ============================================================
+# Section 2: 載入模型 + Adapter
 # ============================================================
 
 MODEL_ID = "Qwen/Qwen2.5-VL-3B-Instruct"
@@ -58,7 +76,7 @@ test_ds = ds["test"]
 print(f"Test set: {len(test_ds)} 筆")
 
 # ============================================================
-# Section 2: 推論函式
+# Section 3: 推論函式
 # ============================================================
 
 SYSTEM_PROMPT = "你是專業的收據資訊抽取助手。請從圖片中抽取所有結構化資訊，以 JSON 格式輸出。"
@@ -107,7 +125,7 @@ def parse_json_safe(text):
 
 
 # ============================================================
-# Section 3: TODO #1 — Batch 推論 🟡
+# Section 4: TODO #1 — Batch 推論 🟡
 # ============================================================
 
 
@@ -152,7 +170,7 @@ sft_results = batch_predict(model, processor, test_ds)
 print(f"完成！共 {len(sft_results)} 筆")
 
 # ============================================================
-# Section 4: 評估 Metrics
+# Section 5: 評估 Metrics
 # ============================================================
 
 
@@ -188,7 +206,7 @@ def field_f1(pred_dict, gt_dict):
 
 
 # ============================================================
-# Section 5: TODO #2 — Tree Edit Distance (TED) 🟡
+# Section 6: TODO #2 — Tree Edit Distance (TED) 🟡
 # ============================================================
 
 
@@ -238,7 +256,7 @@ def tree_edit_similarity(pred, gt):
 
 
 # ============================================================
-# Section 6: 計算所有 metrics
+# Section 7: 計算所有 metrics
 # ============================================================
 
 print("\n計算評估指標...")
@@ -281,7 +299,7 @@ print(f"{'JSON Parse Rate':<25} {baseline['parse_rate']*100:<11.1f}% {sft_parse*
 print("=" * 60)
 
 # ============================================================
-# Section 7: 視覺化
+# Section 8: 視覺化
 # ============================================================
 
 fig, axes = plt.subplots(1, 3, figsize=(15, 5))
@@ -324,7 +342,7 @@ plt.show()
 print("\n圖表已存為 lab4_evaluation.png")
 
 # ============================================================
-# Section 8: TODO #3 — 錯誤分析 🔴
+# Section 9: TODO #3 — 錯誤分析 🔴
 # ============================================================
 
 print("\n" + "=" * 60)
@@ -391,7 +409,7 @@ plt.show()
 print("\n錯誤案例圖片已存為 lab4_error_cases.png")
 
 # ============================================================
-# Section 9: 存下完整評估結果
+# Section 10: 存下完整評估結果
 # ============================================================
 
 eval_results = {
@@ -410,29 +428,35 @@ with open("eval_results.json", "w") as f:
 print("\n完整評估結果已存為 eval_results.json")
 
 # ============================================================
-# Section 10: 反思題
+# Section 11: 上傳評估結果到 W&B
 # ============================================================
 
-print("""
-╔══════════════════════════════════════════════════════════════╗
-║  反思題（請在下方記錄你的觀察）                              ║
-╠══════════════════════════════════════════════════════════════╣
-║                                                              ║
-║  1. SFT 後最大的改善在哪裡？（格式？欄位完整度？數值？）    ║
-║                                                              ║
-║  2. 觀察 top 5 失敗案例，可以分成哪些 pattern？             ║
-║     A. 圖片模糊 / 品質差（資料問題）                         ║
-║     B. 罕見 layout（訓練資料不夠多樣）                       ║
-║     C. 數字 OCR 錯誤（VLM 本質弱項）                        ║
-║     D. JSON 格式幻覺（prompt / training 還沒完全收斂）       ║
-║                                                              ║
-║  3. 如果要把 F1 從 0.78 提升到 0.90+，你會怎麼做？          ║
-║     （更多 data？更大模型？後處理？prompt engineering？）     ║
-║                                                              ║
-╚══════════════════════════════════════════════════════════════╝
+wandb.log({
+    "eval/sft_field_f1": float(sft_f1),
+    "eval/sft_tree_edit_similarity": float(sft_ted),
+    "eval/sft_parse_rate": float(sft_parse),
+    "eval/baseline_field_f1": baseline["f1"],
+    "eval/baseline_parse_rate": baseline["parse_rate"],
+    "eval/f1_improvement": float(sft_f1 - baseline["f1"]),
+})
 
-你的回答:
----
-(在此處寫下你的觀察與反思)
----
-""")
+wandb.log({
+    "charts/evaluation": wandb.Image("lab4_evaluation.png"),
+    "charts/error_cases": wandb.Image("lab4_error_cases.png"),
+})
+
+columns = ["index", "f1_score", "pred_text_preview", "gt_preview", "parse_ok"]
+table_data = []
+for i, r in enumerate(sft_results):
+    gt_str = json.dumps(r["gt_dict"], ensure_ascii=False)[:200]
+    table_data.append([
+        r["index"],
+        f1_scores[i],
+        r["pred_text"][:200],
+        gt_str,
+        r["pred_dict"] is not None,
+    ])
+wandb.log({"eval/predictions_table": wandb.Table(columns=columns, data=table_data)})
+
+wandb.finish()
+print("W&B run 已結束。完整評估記錄可至 https://wandb.ai 查看。")
